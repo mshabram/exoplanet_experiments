@@ -1,0 +1,10 @@
+% Occurrence rates. Using modified version of Daniel Foreman Mackey's iPython notebook. Using DR24 star catalog and planet catalog. DR24 detection efficiency model from Jessie Christiansen. Radius bin edges (i) [1, 1.5] and [1.5, 2.3], period bin edges (j) [20, 40],[40, 80],[80, 160],[160, 320], Spectral Types (k) [M, K, G]
+
+0.096   0.040   0.017   0.007
+0.182   0.076   0.032   0.013
+
+0.112   0.142   0.181   0.232
+0.085   0.108   0.137   0.175
+
+0.061   0.063   0.065   0.067
+0.088   0.090   0.094   0.097

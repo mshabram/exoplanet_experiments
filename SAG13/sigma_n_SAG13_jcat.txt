@@ -1,0 +1,10 @@
+% Minus 1-sigma errors. Using modified version of Daniel Foreman Mackey's iPython notebook. Using DR24 star catalog and planet catalog. DR24 detection efficiency model from Jessie Christiansen. Radius bin edges (i) [1, 1.5] and [1.5, 2.3], period bin edges (j) [20, 40],[40, 80],[80, 160],[160, 320], Spectral Types (k) [M, K, G]
+
+0.054   0.020   0.006   0.002
+0.131   0.047   0.013   0.003
+
+0.087   0.109   0.130   0.151
+0.073   0.094   0.110   0.125
+
+0.048   0.049   0.049   0.047
+0.080   0.082   0.079   0.074
