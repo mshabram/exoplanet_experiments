@@ -57,10 +57,10 @@ stlr = get_catalog("q1_q17_dr24_stellar")
 # m = (5300 <= stlr.teff) & (stlr.teff <= 6000)
 
 # Select K dwarfs.
-# m = (3900 <= stlr.teff) & (stlr.teff <= 5300)
+m = (3900 <= stlr.teff) & (stlr.teff <= 5300)
 
 # Select M dwarfs.
-m = (2400 <= stlr.teff) & (stlr.teff <= 3900)
+# m = (2400 <= stlr.teff) & (stlr.teff <= 3900)
 
 # stellar radius cut
 #m &= stlr.radius <= 1.15
@@ -98,6 +98,7 @@ pl.xlim(9500, 2500)
 pl.ylim(5.5, 3)
 pl.ylabel("$\log g$");
 pl.xlabel("$T_\mathrm{eff}$");
+
 
 #%%=========================================================
 # Get the planet catalog and make selection cuts   
@@ -290,7 +291,70 @@ def get_completeness(star, period, rp, e, with_geom=True):
     pgeom = get_pgeom(aor, e)
     return pdet * pwin * pgeom
     
+#%% functions for insolation 
     
+# Construct grids for log10insolation
+log10insolation_rng = (-2, 5)
+log10insolation = np.linspace(log10insolation_rng[0], log10insolation_rng[1], 57)
+rp2 = np.linspace(rp_rng[0], rp_rng[1], 61)
+log10insolation_grid, rp_grid2 = np.meshgrid(log10insolation, rp2, indexing="ij")
+   
+    
+def get_completeness_from_log10insolation(star, log10insolation_grid, rp_grid2, e, with_geom=True):
+    
+    # compute the periods corresponding to an insolation grid
+    insolation = 10**log10insolation_grid
+    period_grid = get_period_from_insolation( star , insolation )
+    
+    # completeness 
+    completeness = get_completeness(star, period_grid, rp_grid2, e, with_geom=True)
+    
+    return completeness
+    
+
+# Add a function to compute insolation on the period grid, for a given star 
+def get_insolation_from_period( star , period ):
+    
+    # Get needed stellar parameters
+    teffStar = star.teff
+    teffSun = 5777
+    rStar = star.radius
+    mStar = star.mass
+    
+    # Semimajor axis of planet in AU
+    aPlanet = mStar**(1.0/3.0) * (period/365.25)**(2.0/3.0) 
+    
+    # Compute insolation
+    insolation = (teffStar/teffSun)**4*(rStar/1)**2*(1/aPlanet)**2
+    
+    return insolation
+    
+def get_period_from_insolation( star , insolation ):
+    
+    # Get needed stellar parameters
+    teffStar = star.teff
+    teffSun = 5777
+    rStar = star.radius
+    mStar = star.mass
+    
+    # Get semimajor axis from star properties and insolation, using
+    # insolation = ( teffStar / teffSun )**4 * ( rStar / 1)**2 * ( 1 / aPlanet )**2
+    aPlanet = ( ( teffStar / teffSun )**4 * ( rStar / 1)**2 / insolation )**(0.5)
+    
+    # Get orbit period in days from semimajor axis of planet in AU and start properties, using
+    # aPlanet = mStar**(1.0/3.0) * (period/365.25)**(2.0/3.0)
+    period = 365.25 * ( aPlanet/( mStar**(1.0/3.0) ) )**(3.0/2.0)
+    
+    return period
+
+
+# Test 
+xx = get_completeness_from_log10insolation(star, log10insolation_grid, rp_grid2, e, with_geom=True)
+
+
+
+ 
+ 
 #%%=========================================================
 # Reproducing Figure 1 from Burke paper, which is the
 # completeness contour for an example target
@@ -319,6 +383,8 @@ pl.title("det. eff. for KIC10593626");
 period = np.linspace(period_rng[0], period_rng[1], 57)
 rp = np.linspace(rp_rng[0], rp_rng[1], 61)
 period_grid, rp_grid = np.meshgrid(period, rp, indexing="ij")
+
+
 comp = np.zeros_like(period_grid)
 for _, star in stlr.iterrows():
     comp += get_completeness(star, period_grid, rp_grid, 0.0, with_geom=True)
@@ -457,6 +523,7 @@ def plot_results(samples):
     
     return gamma_earth
 
+#%%
 # Maximum likelihood value of gamma_earth
 print(plot_results(r.x));
 
@@ -486,7 +553,10 @@ corner.corner(sampler.flatchain, labels=[r"$\ln F$", r"$\beta$", r"$\alpha$"]);
 # For Rp, marginalize over P
 # For P, marginalize over Rp
 # For N, plot also the data and the error bars
-gamma_earth = plot_results(sampler.flatchain)
+
+# Problem -- the following command quickly maxes out my PCs memory and hangs
+# solution is to plot only the last 4000 chains 
+gamma_earth = plot_results(sampler.flatchain[60000:63999,:])
 
 #%%=========================================================
 # Plot the PDF of gamma_earth
@@ -508,7 +578,8 @@ def integrated_gamma(theta,period1,period2,radius1,radius2):
     zz = xx*yy*np.exp(lnf0)
     return zz
     
- 
+
+#%%
 # Initialize   
 int_gamma_samples = np.empty(len(sampler.flatchain))
 
@@ -525,11 +596,11 @@ for i, theta in enumerate(sampler.flatchain):
 np.percentile(int_gamma_samples,[16,50,84])
 
              
-             
+# Plot posterior of integrated gamma_earth over selected planet radius and period range             
 pl.hist(int_gamma_samples, 50, histtype="step", color="k")
 pl.gca().set_yticklabels([])
 pl.title("Integrated ocurrence over radius and period")
-pl.xlabel(r"integrated  $\Gamma$ 100 - 200 days 1.5 to 2.5 $R_\oplus$");
+pl.xlabel(r"integrated  $\Gamma$: 100 - 200 days 1.5 to 2.5 $R_\oplus$");
 # pl.xlabel(r"$\log_{10}\Gamma_\oplus = \left. \log_{10}\mathrm{d}N / \mathrm{d}\ln P \, \mathrm{d}\ln R_p \right |_\oplus$");
 pl.xticks
 
