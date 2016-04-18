@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Apr 03 14:58:52 2016
+copied the code from exopop_with_ravi.ipynb,
 
-copied all the code cells from exopop_with_ravi.ipynb,
-which is an edited version of the the original from DFM, which is found at
-http://dan.iel.fm/downloads/notebooks/exopop.ipynb
-Accompanying blog post is at
+The the original exopop.ipynb from Dan Foreman-Mackey, is found at
+http://dan.iel.fm/downloads/notebooks/exopop.ipynb, and the 
+accompanying blog post is at
 http://dan.iel.fm/posts/exopop/
+
+Adapting this code by adding option to work in the phase space of 
+[ insolation , planet radius ] rather than [period , planet radius ]
 
 @author: jcat
 """
@@ -291,7 +294,8 @@ def get_completeness(star, period, rp, e, with_geom=True):
     pgeom = get_pgeom(aor, e)
     return pdet * pwin * pgeom
     
-#%% functions for insolation 
+#%% This cell contains functions and code for calculating completeness in the
+#       phase space of [ log10insolation , planet radius ] 
     
 # Construct grids for log10insolation
 log10insolation_rng = (-2, 5)
@@ -348,16 +352,23 @@ def get_period_from_insolation( star , insolation ):
     return period
 
 
-# Test 
-xx = get_completeness_from_log10insolation(star, log10insolation_grid, rp_grid2, e, with_geom=True)
+# Test: compute completeness grid in [ log10insolation , planet radius ] 
+# phase space for the first star in the catalog
+new_completeness_grid_single_star = get_completeness_from_log10insolation(stlr.iloc[0], log10insolation_grid, rp_grid2, 0.0, with_geom=True)
 
+# Marginalize detection contours over all selected targets
+# including the geometric factor
+new_completeness = np.zeros_like(log10insolation_grid)
+for _, star in stlr.iterrows():
+    new_completeness += get_completeness_from_log10insolation(star, log10insolation_grid, rp_grid2, 0.0, with_geom=True)
 
-
- 
  
 #%%=========================================================
 # Reproducing Figure 1 from Burke paper, which is the
 # completeness contour for an example target
+ 
+# Note: this fails if keplerId 10031707 is not in the selected catalog;
+#   in that case, just choose a different star that is in the catalog 
     
 # Choose the star
 # star = stlr[stlr.kepid == 10593626].iloc[0]
@@ -384,11 +395,9 @@ period = np.linspace(period_rng[0], period_rng[1], 57)
 rp = np.linspace(rp_rng[0], rp_rng[1], 61)
 period_grid, rp_grid = np.meshgrid(period, rp, indexing="ij")
 
-
 comp = np.zeros_like(period_grid)
 for _, star in stlr.iterrows():
     comp += get_completeness(star, period_grid, rp_grid, 0.0, with_geom=True)
-
 
 
 #%%=========================================================
@@ -401,9 +410,23 @@ pl.title("mean pipeline detection efficiency")
 pl.xlabel("period [days]")
 pl.ylabel("$R_p \, [R_\oplus]$");
 
+#%%=========================================================
+# Plot the average new_completeness contour
+pl.pcolor(log10insolation_grid, rp_grid, new_completeness, cmap="BuGn")
+c = pl.contour(log10insolation_grid, rp_grid, new_completeness / len(stlr),
+               colors="k", alpha=0.8)
+pl.clabel(c, fontsize=12, inline=1, fmt="%.3f")
+pl.title("mean pipeline detection efficiency")
+pl.xlabel("log10(insolation)")
+pl.ylabel("$R_p \, [R_\oplus]$");
 
 #%%=========================================================
 # Population inference with an independent power law model in P and Rp
+# !!!!! Note: making use of the additional codes above for computing a 
+# completeness grid in the phase space of [ log10insolation , planet radius ], 
+# we can modify the codes that follow to fit the exoplanet occurrence rate 
+# to a power law in insolation and planet radius. 
+# Should be fun to see the result!
 
 # A double power law model for the population.
 def population_model(theta, period, rp):
@@ -554,8 +577,9 @@ corner.corner(sampler.flatchain, labels=[r"$\ln F$", r"$\beta$", r"$\alpha$"]);
 # For P, marginalize over Rp
 # For N, plot also the data and the error bars
 
-# Problem -- the following command quickly maxes out my PCs memory and hangs
-# solution is to plot only the last 4000 chains 
+# !!!!! Problem -- the following command quickly maxes out my PCs memory and brings
+#   it to its knees.    
+# Solution -- plot only the last 4000 chains 
 gamma_earth = plot_results(sampler.flatchain[60000:63999,:])
 
 #%%=========================================================
@@ -567,23 +591,30 @@ pl.xlabel(r"$\log_{10}\Gamma_\oplus = \left. \log_{10}\mathrm{d}N / \mathrm{d}\l
 
 
 #%%=========================================================
-# jcat's Function to compute integrated gamma PDF
+# Integrate the planet density over a given range in period and radius
+#   to get the exoplanet occurrence rate predicted by the power law in that region
 def integrated_gamma(theta,period1,period2,radius1,radius2):
     lnf0, beta, alpha = theta
+    
+    # Phase Space Boundaries for our model
     period_rng = (20, 320)
     radius_rng = (0.75, 2.5)
-   
-    xx = (period2**(beta + 1) - period1**(beta + 1))/(period_rng[1]**(beta + 1) - period_rng[0]**(beta + 1))
-    yy = (radius2**(alpha + 1) - radius1**(alpha + 1))/(radius_rng[1]**(alpha + 1) - radius_rng[0]**(alpha + 1))
-    zz = xx*yy*np.exp(lnf0)
-    return zz
+    
+    # Compute exoplanet occurrence rate integrated over chosen region of [ period , radius] phase space
+    integral_over_period = (period2**(beta + 1) - period1**(beta + 1))/(period_rng[1]**(beta + 1) - period_rng[0]**(beta + 1))
+    integral_over_radius = (radius2**(alpha + 1) - radius1**(alpha + 1))/(radius_rng[1]**(alpha + 1) - radius_rng[0]**(alpha + 1))
+    eta = integral_over_period*integral_over_radius*np.exp(lnf0)
+    
+    return eta
     
 
-#%%
+#%% Compute and plot the posterior PDF for the exoplanet occurence rate in a 
+#   desired region of period, radius phase space
+
 # Initialize   
 int_gamma_samples = np.empty(len(sampler.flatchain))
 
-# period and log(radius) limits
+# Choose period and radius limits
 period1 = 20
 period2 = 40
 radius1 = 1.5
@@ -596,11 +627,11 @@ for i, theta in enumerate(sampler.flatchain):
 np.percentile(int_gamma_samples,[16,50,84])
 
              
-# Plot posterior of integrated gamma_earth over selected planet radius and period range             
+# Plot the posterior of int gamma_samples over selected planet radius and period range             
 pl.hist(int_gamma_samples, 50, histtype="step", color="k")
 pl.gca().set_yticklabels([])
-pl.title("Integrated ocurrence over radius and period")
-pl.xlabel(r"integrated  $\Gamma$: 100 - 200 days 1.5 to 2.5 $R_\oplus$");
+pl.title("Integrated ocurrence rate over radius and period")
+pl.xlabel(r"integrated  $\Gamma$: 20 - 40 days 1.5 to 2.3 $R_\oplus$");
 # pl.xlabel(r"$\log_{10}\Gamma_\oplus = \left. \log_{10}\mathrm{d}N / \mathrm{d}\ln P \, \mathrm{d}\ln R_p \right |_\oplus$");
 pl.xticks
 
